@@ -1,0 +1,60 @@
+name: Mirror Images to GHCR
+on:
+  schedule:
+    - cron: "0 2 * * *"  # Daily at 2 AM UTC
+  workflow_dispatch:
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Tools
+      run: |
+        sudo apt-get update && sudo apt-get install -y skopeo jq
+        # sudo snap install yq
+    - name: Create GHCR Repos and Mirror Images
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Read repos from images.yml
+        REPOS=$(yq -r '.repos[].name' images.yml)
+        echo $REPOS
+        for REPO in $REPOS; do
+          echo $REPO
+          # Read images for this repo
+          IMAGES=$(yq -r ".repos[] | select(.name == \"$REPO\") | .images[].name" images.yml)
+          echo $IMAGES
+          for IMG in $IMAGES; do
+            echo $IMG
+            # Create GHCR repo
+            # Check if GHCR repo exists
+            REPO_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/orgs/future-school/packages/container/$IMG)
+            echo $REPO_EXISTS
+            if [[ "$REPO_EXISTS" != "200" ]]; then
+              curl -X PUT \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                https://api.github.com/orgs/future-school/packages/container/$IMG \
+                -d '{"visibility":"public"}'
+            else
+              echo "Repo $IMG already exists"
+            fi
+            # Get tags (including patterns)
+            TAGS=$(yq -r ".repos[] | select(.name == \"$REPO\") | .images[] | select(.name == \"$IMG\") | .tags[]" images.yml)
+            echo $TAGS
+            for TAG in $TAGS; do
+              if [[ $TAG == *"*"* ]]; then
+                # Handle pattern: list tags from upstream and filter
+                skopeo list-tags docker://$REPO/$IMG | jq -r '.Tags[]' | grep -E "${TAG//\*/.*}" | while read -r MATCHED_TAG; do
+                  skopeo copy --all --dest-creds "${{ github.actor }}:${GH_TOKEN}" docker://$REPO/$IMG:$MATCHED_TAG docker://ghcr.io/future-school/$IMG:$MATCHED_TAG
+                done
+              else
+                # Exact tag
+                skopeo copy --all --dest-creds "${{ github.actor }}:${GH_TOKEN}" docker://$REPO/$IMG:$TAG docker://ghcr.io/future-school/$IMG:$TAG
+              fi
+            done
+          done
+        done
