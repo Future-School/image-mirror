@@ -28,20 +28,20 @@ jobs:
             echo $IMG
             # Create GHCR repo
             # Check if GHCR repo exists
-            REPO_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              https://api.github.com/orgs/future-school/packages/container/$IMG)
-            echo $REPO_EXISTS
-            if [[ "$REPO_EXISTS" != "200" ]]; then
-              curl -X PUT \
-                -H "Authorization: Bearer $GH_TOKEN" \
-                -H "Accept: application/vnd.github+json" \
-                https://api.github.com/orgs/future-school/packages/container/$IMG \
-                -d '{"visibility":"public"}'
-            else
-              echo "Repo $IMG already exists"
-            fi
+            # REPO_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
+            #   -H "Authorization: Bearer $GH_TOKEN" \
+            #   -H "Accept: application/vnd.github+json" \
+            #   https://api.github.com/orgs/future-school/packages/container/$IMG)
+            # echo $REPO_EXISTS
+            # if [[ "$REPO_EXISTS" != "200" ]]; then
+            #   curl -X PUT \
+            #     -H "Authorization: Bearer $GH_TOKEN" \
+            #     -H "Accept: application/vnd.github+json" \
+            #     https://api.github.com/orgs/future-school/packages/container/$IMG \
+            #     -d '{"visibility":"public"}'
+            # else
+            #   echo "Repo $IMG already exists"
+            # fi
             # Get tags (including patterns)
             TAGS=$(yq -r ".repos[] | select(.name == \"$REPO\") | .images[] | select(.name == \"$IMG\") | .tags[]" images.yml)
             echo $TAGS
